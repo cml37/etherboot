@@ -155,12 +155,6 @@ static void ns8390_reset(struct nic *nic)
 	outb(eth_memsize - 1, eth_nic_base+D8390_P0_BOUND);
 	outb(0xFF, eth_nic_base+D8390_P0_ISR);
 	outb(0, eth_nic_base+D8390_P0_IMR);
-#ifdef	INCLUDE_WD
-	if (eth_flags & FLAG_790)
-		outb(D8390_COMMAND_PS1 |
-			D8390_COMMAND_STP, eth_nic_base+D8390_P0_COMMAND);
-	else
-#endif
 		outb(D8390_COMMAND_PS1 |
 			D8390_COMMAND_RD2 | D8390_COMMAND_STP, eth_nic_base+D8390_P0_COMMAND);
 	for (i=0; i<ETH_ALEN; i++)
@@ -168,12 +162,6 @@ static void ns8390_reset(struct nic *nic)
 	for (i=0; i<ETH_ALEN; i++)
 		outb(0xFF, eth_nic_base+D8390_P1_MAR0+i);
 	outb(eth_rx_start, eth_nic_base+D8390_P1_CURR);
-#ifdef	INCLUDE_WD
-	if (eth_flags & FLAG_790)
-		outb(D8390_COMMAND_PS0 |
-			D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
-	else
-#endif
 		outb(D8390_COMMAND_PS0 |
 			D8390_COMMAND_RD2 | D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
 	outb(0xFF, eth_nic_base+D8390_P0_ISR);
@@ -181,22 +169,10 @@ static void ns8390_reset(struct nic *nic)
 	outb(4, eth_nic_base+D8390_P0_RCR);	/* allow rx broadcast frames */
 
 	enable_multicast(eth_nic_base);
-
-#ifdef	INCLUDE_3C503
-        /*
-         * No way to tell whether or not we're supposed to use
-         * the 3Com's transceiver unless the user tells us.
-         * 'flags' should have some compile time default value
-         * which can be changed from the command menu.
-         */
-	t503_output = (nic->flags) ? 0 : _3COM_CR_XSEL;
-	outb(t503_output, eth_asic_base + _3COM_CR);
-#endif
 }
 
 static int ns8390_poll(struct nic *nic, int retrieve);
 
-#ifndef	INCLUDE_3C503
 /**************************************************************************
 ETH_RX_OVERRUN - Bring adapter back to work after an RX overrun
 **************************************************************************/
@@ -204,11 +180,6 @@ static void eth_rx_overrun(struct nic *nic)
 {
 	int start_time;
 
-#ifdef	INCLUDE_WD
-	if (eth_flags & FLAG_790)
-		outb(D8390_COMMAND_PS0 | D8390_COMMAND_STP, eth_nic_base+D8390_P0_COMMAND);
-	else
-#endif
 		outb(D8390_COMMAND_PS0 | D8390_COMMAND_RD2 |
 			D8390_COMMAND_STP, eth_nic_base+D8390_P0_COMMAND);
 
@@ -227,11 +198,6 @@ static void eth_rx_overrun(struct nic *nic)
 
 	/* enter loopback mode and restart NIC */
 	outb(2, eth_nic_base+D8390_P0_TCR);
-#ifdef	INCLUDE_WD
-	if (eth_flags & FLAG_790)
-		outb(D8390_COMMAND_PS0 | D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
-	else
-#endif
 		outb(D8390_COMMAND_PS0 | D8390_COMMAND_RD2 |
 			D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
 
@@ -245,7 +211,6 @@ static void eth_rx_overrun(struct nic *nic)
 	/* leave loopback mode - no packets to be resent (see Linux driver) */
 	outb(0, eth_nic_base+D8390_P0_TCR);
 }
-#endif	/* INCLUDE_3C503 */
 
 /**************************************************************************
 NS8390_TRANSMIT - Transmit a frame
@@ -257,26 +222,6 @@ static void ns8390_transmit(
 	unsigned int s,			/* size */
 	const char *p)			/* Packet */
 {
-#if defined(INCLUDE_3C503) || (defined(INCLUDE_WD) && ! defined(WD_790_PIO))
-	Address		eth_vmem = bus_to_virt(eth_bmem);
-#endif
-#ifdef	INCLUDE_3C503
-        if (!(eth_flags & FLAG_PIO)) {
-                memcpy((char *)eth_vmem, d, ETH_ALEN);	/* dst */
-                memcpy((char *)eth_vmem+ETH_ALEN, nic->node_addr, ETH_ALEN); /* src */
-                *((char *)eth_vmem+12) = t>>8;		/* type */
-                *((char *)eth_vmem+13) = t;
-                memcpy((char *)eth_vmem+ETH_HLEN, p, s);
-                s += ETH_HLEN;
-                while (s < ETH_ZLEN) *((char *)eth_vmem+(s++)) = 0;
-        }
-#endif
-
-#ifdef	INCLUDE_WD
-	if (eth_flags & FLAG_16BIT) {
-		outb(eth_laar | WD_LAAR_M16EN, eth_asic_base + WD_LAAR);
-		inb(0x84);
-	}
 #ifndef	WD_790_PIO
 	/* Memory interface */
 	if (eth_flags & FLAG_790) {
@@ -300,10 +245,6 @@ static void ns8390_transmit(
 #endif
 #endif
 
-#if	defined(INCLUDE_3C503)
-	if (eth_flags & FLAG_PIO)
-#endif
-#if	defined(INCLUDE_NE) || defined(INCLUDE_NS8390) || (defined(INCLUDE_3C503) && !defined(T503_SHMEM)) || (defined(INCLUDE_WD) && defined(WD_790_PIO))
 	{
 		/* Programmed I/O */
 		unsigned short type;
@@ -316,7 +257,6 @@ static void ns8390_transmit(
 		s += ETH_HLEN;
 		if (s < ETH_ZLEN) s = ETH_ZLEN;
 	}
-#endif
 #if	defined(INCLUDE_3C503)
 #endif
 
