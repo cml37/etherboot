@@ -17,6 +17,7 @@ Author: Martin Renters
 
 #define MEM_8192	32
 #define MEM_16384	64
+#define MEM_12288   48
 #define MEM_32768	128
 
 #define	ISA_MAX_ADDR	0x400

@@ -487,19 +487,19 @@ CFLAGS+=	-DPXE_IMAGE -DPXE_EXPORT
 
 # you should normally not need to change these
 HOST_CC=	gcc
-CPP=		gcc -E -Wp,-Wall
+CPP=		gcc-3.4 -m32 -E -Wp,-Wall
 RM=		rm -f
 TOUCH=		touch
 PERL=		/usr/bin/perl
-CC=		gcc
-AS=		as
-LD=		ld
+CC=		gcc-3.4
+AS=		as --32
+LD=		ld-2.26 -m elf_i386
 SIZE=		size
 AR=		ar
 RANLIB=		ranlib
 OBJCOPY=	objcopy
 
-CFLAGS+=	-Os -ffreestanding
+CFLAGS+=	-Os -ffreestanding -m32
 CFLAGS+=	-Wall -W -Wno-format
 CFLAGS+=	$(EXTRA_CFLAGS)
 ASFLAGS+=	$(EXTRA_ASFLAGS)
