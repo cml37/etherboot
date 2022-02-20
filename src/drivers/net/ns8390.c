@@ -222,28 +222,6 @@ static void ns8390_transmit(
 	unsigned int s,			/* size */
 	const char *p)			/* Packet */
 {
-#ifndef	WD_790_PIO
-	/* Memory interface */
-	if (eth_flags & FLAG_790) {
-		outb(WD_MSR_MENB, eth_asic_base + WD_MSR);
-		inb(0x84);
-	}
-	inb(0x84);
-	memcpy((char *)eth_vmem, d, ETH_ALEN);	/* dst */
-	memcpy((char *)eth_vmem+ETH_ALEN, nic->node_addr, ETH_ALEN); /* src */
-	*((char *)eth_vmem+12) = t>>8;		/* type */
-	*((char *)eth_vmem+13) = t;
-	memcpy((char *)eth_vmem+ETH_HLEN, p, s);
-	s += ETH_HLEN;
-	while (s < ETH_ZLEN) *((char *)eth_vmem+(s++)) = 0;
-	if (eth_flags & FLAG_790) {
-		outb(0, eth_asic_base + WD_MSR);
-		inb(0x84);
-	}
-#else
-	inb(0x84);
-#endif
-
 	{
 		/* Programmed I/O */
 		unsigned short type;
@@ -256,30 +234,11 @@ static void ns8390_transmit(
 		s += ETH_HLEN;
 		if (s < ETH_ZLEN) s = ETH_ZLEN;
 	}
-#if	defined(INCLUDE_3C503)
-#endif
-
-#ifdef	INCLUDE_WD
-	if (eth_flags & FLAG_16BIT) {
-		outb(eth_laar & ~WD_LAAR_M16EN, eth_asic_base + WD_LAAR);
-		inb(0x84);
-	}
-	if (eth_flags & FLAG_790)
-		outb(D8390_COMMAND_PS0 |
-			D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
-	else
-#endif
 		outb(D8390_COMMAND_PS0 |
 			D8390_COMMAND_RD2 | D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
 	outb(eth_tx_start, eth_nic_base+D8390_P0_TPSR);
 	outb(s, eth_nic_base+D8390_P0_TBCR0);
 	outb(s>>8, eth_nic_base+D8390_P0_TBCR1);
-#ifdef	INCLUDE_WD
-	if (eth_flags & FLAG_790)
-		outb(D8390_COMMAND_PS0 |
-			D8390_COMMAND_TXP | D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
-	else
-#endif
 		outb(D8390_COMMAND_PS0 |
 			D8390_COMMAND_TXP | D8390_COMMAND_RD2 |
 			D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
@@ -297,13 +256,11 @@ static int ns8390_poll(struct nic *nic, int retrieve)
 	unsigned char *p;
 	struct ringbuffer pkthdr;
 
-#ifndef	INCLUDE_3C503
 	/* avoid infinite recursion: see eth_rx_overrun() */
 	if (!eth_drain_receiver && (inb(eth_nic_base+D8390_P0_ISR) & D8390_ISR_OVW)) {
 		eth_rx_overrun(nic);
 		return(0);
 	}
-#endif	/* INCLUDE_3C503 */
 	rstat = inb(eth_nic_base+D8390_P0_RSR);
 	if (!(rstat & D8390_RSTAT_PRX)) return(0);
 	next = inb(eth_nic_base+D8390_P0_BOUND)+1;
@@ -316,19 +273,6 @@ static int ns8390_poll(struct nic *nic, int retrieve)
 
 	if ( ! retrieve ) return 1;
 
-#ifdef	INCLUDE_WD
-	if (eth_flags & FLAG_16BIT) {
-		outb(eth_laar | WD_LAAR_M16EN, eth_asic_base + WD_LAAR);
-		inb(0x84);
-	}
-#ifndef	WD_790_PIO
-	if (eth_flags & FLAG_790) {
-		outb(WD_MSR_MENB, eth_asic_base + WD_MSR);
-		inb(0x84);
-	}
-#endif
-	inb(0x84);
-#endif
 	pktoff = next << 8;
 	if (eth_flags & FLAG_PIO)
 		eth_pio_read(pktoff, (char *)&pkthdr, 4);
@@ -411,254 +355,15 @@ static void ns8390_irq(struct nic *nic __unused, irq_action_t action __unused)
 /**************************************************************************
 ETH_PROBE - Look for an adapter
 **************************************************************************/
-#ifdef	INCLUDE_NS8390
-static int eth_probe (struct dev *dev, struct pci_device *pci)
-#else
 static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
-#endif
 {
 	struct nic *nic = (struct nic *)dev;
 	int i;
-#ifdef INCLUDE_NS8390
-	unsigned short pci_probe_addrs[] = { pci->ioaddr, 0 };
-	unsigned short *probe_addrs = pci_probe_addrs;
-#endif
 	eth_vendor = VENDOR_NONE;
 	eth_drain_receiver = 0;
 
 	nic->irqno  = 0;
 
-#ifdef	INCLUDE_WD
-{
-	/******************************************************************
-	Search for WD/SMC cards
-	******************************************************************/
-	struct wd_board *brd;
-	unsigned short chksum;
-	unsigned char c;
-	for (eth_asic_base = WD_LOW_BASE; eth_asic_base <= WD_HIGH_BASE;
-		eth_asic_base += 0x20) {
-		chksum = 0;
-		for (i=8; i<16; i++)
-			chksum += inb(eth_asic_base+i);
-		/* Extra checks to avoid soundcard */
-		if ((chksum & 0xFF) == 0xFF &&
-			inb(eth_asic_base+8) != 0xFF &&
-			inb(eth_asic_base+9) != 0xFF)
-			break;
-	}
-	if (eth_asic_base > WD_HIGH_BASE)
-		return (0);
-	/* We've found a board */
-	eth_vendor = VENDOR_WD;
-	eth_nic_base = eth_asic_base + WD_NIC_ADDR;
-
-	nic->ioaddr = eth_nic_base;
-
-	c = inb(eth_asic_base+WD_BID);	/* Get board id */
-	for (brd = wd_boards; brd->name; brd++)
-		if (brd->id == c) break;
-	if (!brd->name) {
-		printf("Unknown WD/SMC NIC type %hhX\n", c);
-		return (0);	/* Unknown type */
-	}
-	eth_flags = brd->flags;
-	eth_memsize = brd->memsize;
-	eth_tx_start = 0;
-	eth_rx_start = D8390_TXBUF_SIZE;
-	if ((c == TYPE_WD8013EP) &&
-		(inb(eth_asic_base + WD_ICR) & WD_ICR_16BIT)) {
-			eth_flags = FLAG_16BIT;
-			eth_memsize = MEM_16384;
-	}
-	if ((c & WD_SOFTCONFIG) && (!(eth_flags & FLAG_790))) {
-		eth_bmem = (0x80000 |
-		 ((inb(eth_asic_base + WD_MSR) & 0x3F) << 13));
-	} else
-		eth_bmem = WD_DEFAULT_MEM;
-	if (brd->id == TYPE_SMC8216T || brd->id == TYPE_SMC8216C) {
-		/* from Linux driver, 8416BT detects as 8216 sometimes */
-		unsigned int addr = inb(eth_asic_base + 0xb);
-		if (((addr >> 4) & 3) == 0) {
-			brd += 2;
-			eth_memsize = brd->memsize;
-		}
-	}
-	outb(0x80, eth_asic_base + WD_MSR);	/* Reset */
-	for (i=0; i<ETH_ALEN; i++) {
-		nic->node_addr[i] = inb(i+eth_asic_base+WD_LAR);
-	}
-	printf("\n%s base %#hx", brd->name, eth_asic_base);
-	if (eth_flags & FLAG_790) {
-#ifdef	WD_790_PIO
-		printf(", PIO mode, addr %!\n", nic->node_addr);
-		eth_bmem = 0;
-		eth_flags |= FLAG_PIO;		/* force PIO mode */
-		outb(0, eth_asic_base+WD_MSR);
-#else
-		printf(", memory %#x, addr %!\n", eth_bmem, nic->node_addr);
-		outb(WD_MSR_MENB, eth_asic_base+WD_MSR);
-		outb((inb(eth_asic_base+0x04) |
-			0x80), eth_asic_base+0x04);
-		outb(((unsigned)(eth_bmem >> 13) & 0x0F) |
-			((unsigned)(eth_bmem >> 11) & 0x40) |
-			(inb(eth_asic_base+0x0B) & 0xB0), eth_asic_base+0x0B);
-		outb((inb(eth_asic_base+0x04) &
-			~0x80), eth_asic_base+0x04);
-#endif
-	} else {
-		printf(", memory %#x, addr %!\n", eth_bmem, nic->node_addr);
-		outb(((unsigned)(eth_bmem >> 13) & 0x3F) | 0x40, eth_asic_base+WD_MSR);
-	}
-	if (eth_flags & FLAG_16BIT) {
-		if (eth_flags & FLAG_790) {
-			eth_laar = inb(eth_asic_base + WD_LAAR);
-			outb(WD_LAAR_M16EN, eth_asic_base + WD_LAAR);
-		} else {
-			outb((eth_laar =
-				WD_LAAR_L16EN | 1), eth_asic_base + WD_LAAR);
-/*
-	The previous line used to be
-				WD_LAAR_M16EN | WD_LAAR_L16EN | 1));
-	jluke@deakin.edu.au reported that removing WD_LAAR_M16EN made
-	it work for WD8013s.  This seems to work for my 8013 boards. I
-	don't know what is really happening.  I wish I had data sheets
-	or more time to decode the Linux driver. - Ken
-*/
-		}
-		inb(0x84);
-	}
-}
-#endif
-#ifdef	INCLUDE_3C503
-#ifdef	T503_AUI
-	nic->flags = 1;		/* aui */
-#else
-	nic->flags = 0;		/* no aui */
-#endif
-        /******************************************************************
-        Search for 3Com 3c503 if no WD/SMC cards
-        ******************************************************************/
-	if (eth_vendor == VENDOR_NONE) {
-		int	idx;
-		int	iobase_reg, membase_reg;
-		static unsigned short	base[] = {
-			0x300, 0x310, 0x330, 0x350,
-			0x250, 0x280, 0x2A0, 0x2E0, 0 };
-
-		/* Loop through possible addresses checking each one */
-
-		for (idx = 0; (eth_nic_base = base[idx]) != 0; ++idx) {
-
-			eth_asic_base = eth_nic_base + _3COM_ASIC_OFFSET;
-/*
- * Note that we use the same settings for both 8 and 16 bit cards:
- * both have an 8K bank of memory at page 1 while only the 16 bit
- * cards have a bank at page 0.
- */
-			eth_memsize = MEM_16384;
-			eth_tx_start = 32;
-			eth_rx_start = 32 + D8390_TXBUF_SIZE;
-
-		/* Check our base address. iobase and membase should */
-		/* both have a maximum of 1 bit set or be 0. */
-
-			iobase_reg = inb(eth_asic_base + _3COM_BCFR);
-			membase_reg = inb(eth_asic_base + _3COM_PCFR);
-
-			if ((iobase_reg & (iobase_reg - 1)) ||
-				(membase_reg & (membase_reg - 1)))
-				continue;		/* nope */
-
-		/* Now get the shared memory address */
-
-			eth_flags = 0;
-
-			switch (membase_reg) {
-				case _3COM_PCFR_DC000:
-					eth_bmem = 0xdc000;
-					break;
-				case _3COM_PCFR_D8000:
-					eth_bmem = 0xd8000;
-					break;
-				case _3COM_PCFR_CC000:
-					eth_bmem = 0xcc000;
-					break;
-				case _3COM_PCFR_C8000:
-					eth_bmem = 0xc8000;
-					break;
-				case _3COM_PCFR_PIO:
-					eth_flags |= FLAG_PIO;
-					eth_bmem = 0;
-					break;
-				default:
-					continue;	/* nope */
-				}
-			break;
-		}
-
-		if (base[idx] == 0)		/* not found */
-			return (0);
-#ifndef	T503_SHMEM
-		eth_flags |= FLAG_PIO;		/* force PIO mode */
-		eth_bmem = 0;
-#endif
-		eth_vendor = VENDOR_3COM;
-
-
-        /* Need this to make ns8390_poll() happy. */
-
-                eth_rmem = eth_bmem - 0x2000;
-
-        /* Reset NIC and ASIC */
-
-                outb(_3COM_CR_RST | _3COM_CR_XSEL, eth_asic_base + _3COM_CR );
-                outb(_3COM_CR_XSEL, eth_asic_base + _3COM_CR );
-
-        /* Get our ethernet address */
-
-                outb(_3COM_CR_EALO | _3COM_CR_XSEL, eth_asic_base + _3COM_CR);
-		nic->ioaddr = eth_nic_base;
-                printf("\n3Com 3c503 base %#hx, ", eth_nic_base);
-                if (eth_flags & FLAG_PIO)
-			printf("PIO mode");
-                else
-			printf("memory %#x", eth_bmem);
-                for (i=0; i<ETH_ALEN; i++) {
-                        nic->node_addr[i] = inb(eth_nic_base+i);
-                }
-                printf(", %s, addr %!\n", nic->flags ? "AUI" : "internal xcvr",
-			nic->node_addr);
-                outb(_3COM_CR_XSEL, eth_asic_base + _3COM_CR);
-        /*
-         * Initialize GA configuration register. Set bank and enable shared
-         * mem. We always use bank 1. Disable interrupts.
-         */
-                outb(_3COM_GACFR_RSEL |
-			_3COM_GACFR_MBS0 | _3COM_GACFR_TCM | _3COM_GACFR_NIM, eth_asic_base + _3COM_GACFR);
-
-                outb(0xff, eth_asic_base + _3COM_VPTR2);
-                outb(0xff, eth_asic_base + _3COM_VPTR1);
-                outb(0x00, eth_asic_base + _3COM_VPTR0);
-        /*
-         * Clear memory and verify that it worked (we use only 8K)
-         */
-
-		if (!(eth_flags & FLAG_PIO)) {
-			memset(bus_to_virt(eth_bmem), 0, 0x2000);
-			for(i = 0; i < 0x2000; ++i)
-				if (*((char *)(bus_to_virt(eth_bmem+i)))) {
-					printf ("Failed to clear 3c503 shared mem.\n");
-					return (0);
-				}
-		}
-        /*
-         * Initialize GA page/start/stop registers.
-         */
-                outb(eth_tx_start, eth_asic_base + _3COM_PSTR);
-                outb(eth_memsize, eth_asic_base + _3COM_PSPR);
-        }
-#endif
 #if	defined(INCLUDE_NE) || defined(INCLUDE_NS8390)
 {
 	/******************************************************************
@@ -693,9 +398,6 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 			outb(D8390_DCR_FT1 | D8390_DCR_LS, eth_nic_base + D8390_P0_DCR);
 			outb(MEM_8192, eth_nic_base + D8390_P0_PSTART);
 			outb(MEM_16384, eth_nic_base + D8390_P0_PSTOP);
-#ifdef	NS8390_FORCE_16BIT
-			eth_flags |= FLAG_16BIT;	/* force 16-bit mode */
-#endif
 
 			eth_pio_write(test, 8192, sizeof(test));
 			eth_pio_read(8192, testbuf, sizeof(test));
@@ -757,24 +459,6 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 	return 1;
 }
 
-#ifdef	INCLUDE_WD
-static struct isa_driver wd_driver __isa_driver = {
-	.type    = NIC_DRIVER,
-	.name    = "WD",
-	.probe   = wd_probe,
-	.ioaddrs = 0,
-};
-#endif
-
-#ifdef	INCLUDE_3C503
-static struct isa_driver t503_driver __isa_driver = {
-	.type    = NIC_DRIVER,
-	.name    = "3C503",
-	.probe   = t503_probe,
-	.ioaddrs = 0,
-};
-#endif
-
 #ifdef	INCLUDE_NE
 static struct isa_driver ne_driver __isa_driver = {
 	.type    = NIC_DRIVER,
@@ -784,32 +468,6 @@ static struct isa_driver ne_driver __isa_driver = {
 };
 #endif
 
-#ifdef	INCLUDE_NS8390
-static struct pci_id nepci_nics[] = {
-/* A few NE2000 PCI clones, list not exhaustive */
-PCI_ROM(0x10ec, 0x8029, "rtl8029",      "Realtek 8029"),
-PCI_ROM(0x1186, 0x0300, "dlink-528",    "D-Link DE-528"),
-PCI_ROM(0x1050, 0x0940, "winbond940",   "Winbond NE2000-PCI"),		/* Winbond 86C940 / 89C940 */
-PCI_ROM(0x1050, 0x5a5a, "winbond940f",  "Winbond W89c940F"),		/* Winbond 89C940F */
-PCI_ROM(0x11f6, 0x1401, "compexrl2000", "Compex ReadyLink 2000"),
-PCI_ROM(0x8e2e, 0x3000, "ktiet32p2",    "KTI ET32P2"),
-PCI_ROM(0x4a14, 0x5000, "nv5000sc",     "NetVin NV5000SC"),
-PCI_ROM(0x12c3, 0x0058, "holtek80232",  "Holtek HT80232"),
-PCI_ROM(0x12c3, 0x5598, "holtek80229",  "Holtek HT80229"),
-PCI_ROM(0x10bd, 0x0e34, "surecom-ne34", "Surecom NE34"),
-PCI_ROM(0x1106, 0x0926, "via86c926",    "Via 86c926"),
-};
-
-static struct pci_driver nepci_driver __pci_driver = {
-	.type     = NIC_DRIVER,
-	.name     = "NE2000/PCI",
-	.probe    = nepci_probe,
-	.ids      = nepci_nics,
-	.id_count = sizeof(nepci_nics)/sizeof(nepci_nics[0]),
-	.class    = 0,
-};
-
-#endif /* INCLUDE_NS8390 */
 
 /*
  * Local variables:
