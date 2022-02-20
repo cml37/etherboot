@@ -39,16 +39,11 @@ static unsigned char	eth_drain_receiver;
 #define	eth_probe	ne_probe
 #define	ASIC_PIO	NE_DATA
 
-#if	defined(INCLUDE_NE) || defined(INCLUDE_NS8390) || (defined(INCLUDE_3C503) && !defined(T503_SHMEM)) || (defined(INCLUDE_WD) && defined(WD_790_PIO))
 /**************************************************************************
 ETH_PIO_READ - Read a frame via Programmed I/O
 **************************************************************************/
 static void eth_pio_read(unsigned int src, unsigned char *dst, unsigned int cnt)
 {
-#ifdef	INCLUDE_WD
-	outb(src & 0xff, eth_asic_base + WD_GP2);
-	outb(src >> 8, eth_asic_base + WD_GP2);
-#else
 	outb(D8390_COMMAND_RD2 |
 		D8390_COMMAND_STA, eth_nic_base + D8390_P0_COMMAND);
 	outb(cnt, eth_nic_base + D8390_P0_RBCR0);
@@ -58,22 +53,10 @@ static void eth_pio_read(unsigned int src, unsigned char *dst, unsigned int cnt)
 	outb(D8390_COMMAND_RD0 |
 		D8390_COMMAND_STA, eth_nic_base + D8390_P0_COMMAND);
 
-#ifdef	INCLUDE_3C503
-	outb(src & 0xff, eth_asic_base + _3COM_DALSB);
-	outb(src >> 8, eth_asic_base + _3COM_DAMSB);
-	outb(t503_output | _3COM_CR_START, eth_asic_base + _3COM_CR);
-#endif
-#endif
-
 	if (eth_flags & FLAG_16BIT)
 		cnt = (cnt + 1) >> 1;
 
 	while(cnt--) {
-#ifdef	INCLUDE_3C503
-		while((inb(eth_asic_base + _3COM_STREG) & _3COM_STREG_DPRDY) == 0)
-			;
-#endif
-
 		if (eth_flags & FLAG_16BIT) {
 			*((unsigned short *)dst) = inw(eth_asic_base + ASIC_PIO);
 			dst += 2;
@@ -81,10 +64,6 @@ static void eth_pio_read(unsigned int src, unsigned char *dst, unsigned int cnt)
 		else
 			*(dst++) = inb(eth_asic_base + ASIC_PIO);
 	}
-
-#ifdef	INCLUDE_3C503
-	outb(t503_output, eth_asic_base + _3COM_CR);
-#endif
 }
 
 /**************************************************************************
@@ -95,10 +74,6 @@ static void eth_pio_write(const unsigned char *src, unsigned int dst, unsigned i
 #ifdef	COMPEX_RL2000_FIX
 	unsigned int x;
 #endif	/* COMPEX_RL2000_FIX */
-#ifdef	INCLUDE_WD
-	outb(dst & 0xff, eth_asic_base + WD_GP2);
-	outb(dst >> 8, eth_asic_base + WD_GP2);
-#else
 	outb(D8390_COMMAND_RD2 |
 		D8390_COMMAND_STA, eth_nic_base + D8390_P0_COMMAND);
 	outb(D8390_ISR_RDC, eth_nic_base + D8390_P0_ISR);
@@ -109,24 +84,11 @@ static void eth_pio_write(const unsigned char *src, unsigned int dst, unsigned i
 	outb(D8390_COMMAND_RD1 |
 		D8390_COMMAND_STA, eth_nic_base + D8390_P0_COMMAND);
 
-#ifdef	INCLUDE_3C503
-	outb(dst & 0xff, eth_asic_base + _3COM_DALSB);
-	outb(dst >> 8, eth_asic_base + _3COM_DAMSB);
-
-	outb(t503_output | _3COM_CR_DDIR | _3COM_CR_START, eth_asic_base + _3COM_CR);
-#endif
-#endif
-
 	if (eth_flags & FLAG_16BIT)
 		cnt = (cnt + 1) >> 1;
 
 	while(cnt--)
 	{
-#ifdef	INCLUDE_3C503
-		while((inb(eth_asic_base + _3COM_STREG) & _3COM_STREG_DPRDY) == 0)
-			;
-#endif
-
 		if (eth_flags & FLAG_16BIT) {
 			outw(*((unsigned short *)src), eth_asic_base + ASIC_PIO);
 			src += 2;
@@ -135,9 +97,6 @@ static void eth_pio_write(const unsigned char *src, unsigned int dst, unsigned i
 			outb(*(src++), eth_asic_base + ASIC_PIO);
 	}
 
-#ifdef	INCLUDE_3C503
-	outb(t503_output, eth_asic_base + _3COM_CR);
-#else
 #ifdef	COMPEX_RL2000_FIX
 	for (x = 0;
 		x < COMPEX_RL2000_TRIES &&
@@ -147,18 +106,10 @@ static void eth_pio_write(const unsigned char *src, unsigned int dst, unsigned i
 	if (x >= COMPEX_RL2000_TRIES)
 		printf("Warning: Compex RL2000 aborted wait!\n");
 #endif	/* COMPEX_RL2000_FIX */
-#ifndef	INCLUDE_WD
 	while((inb(eth_nic_base + D8390_P0_ISR) & D8390_ISR_RDC)
 		!= D8390_ISR_RDC);
 #endif
-#endif
 }
-#else
-/**************************************************************************
-ETH_PIO_READ - Dummy routine when NE2000 not compiled in
-**************************************************************************/
-static void eth_pio_read(unsigned int src __unused, unsigned char *dst  __unused, unsigned int cnt __unused) {}
-#endif
 
 
 /**************************************************************************
