@@ -139,13 +139,8 @@ static void ns8390_reset(struct nic *nic)
 	int i;
 
 	eth_drain_receiver = 0;
-#ifdef	INCLUDE_WD
-	if (eth_flags & FLAG_790)
-		outb(D8390_COMMAND_PS0 | D8390_COMMAND_STP, eth_nic_base+D8390_P0_COMMAND);
-	else
-#endif
-		outb(D8390_COMMAND_PS0 | D8390_COMMAND_RD2 |
-			D8390_COMMAND_STP, eth_nic_base+D8390_P0_COMMAND);
+    outb(D8390_COMMAND_PS0 | D8390_COMMAND_RD2 |
+         D8390_COMMAND_STP, eth_nic_base+D8390_P0_COMMAND);
 	if (eth_flags & FLAG_16BIT)
 		outb(0x49, eth_nic_base+D8390_P0_DCR);
 	else
@@ -156,16 +151,6 @@ static void ns8390_reset(struct nic *nic)
 	outb(2, eth_nic_base+D8390_P0_TCR);
 	outb(eth_tx_start, eth_nic_base+D8390_P0_TPSR);
 	outb(eth_rx_start, eth_nic_base+D8390_P0_PSTART);
-#ifdef	INCLUDE_WD
-	if (eth_flags & FLAG_790) {
-#ifdef	WD_790_PIO
-		outb(0x10, eth_asic_base + 0x06); /* disable interrupts, enable PIO */
-		outb(0x01, eth_nic_base + 0x09); /* enable ring read auto-wrap */
-#else
-		outb(0, eth_nic_base + 0x09);
-#endif
-	}
-#endif
 	outb(eth_memsize, eth_nic_base+D8390_P0_PSTOP);
 	outb(eth_memsize - 1, eth_nic_base+D8390_P0_BOUND);
 	outb(0xFF, eth_nic_base+D8390_P0_ISR);
