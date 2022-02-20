@@ -108,7 +108,6 @@ static void eth_pio_write(const unsigned char *src, unsigned int dst, unsigned i
 #endif	/* COMPEX_RL2000_FIX */
 	while((inb(eth_nic_base + D8390_P0_ISR) & D8390_ISR_RDC)
 		!= D8390_ISR_RDC);
-#endif
 }
 
 
