@@ -243,7 +243,6 @@ static void ns8390_transmit(
 #else
 	inb(0x84);
 #endif
-#endif
 
 	{
 		/* Programmed I/O */
