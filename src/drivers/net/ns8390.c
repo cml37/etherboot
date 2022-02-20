@@ -28,87 +28,16 @@ SMC8416 PIO support added by Andrew Bettison (andrewb@zip.com.au) on 4/3/02
 #include "etherboot.h"
 #include "nic.h"
 #include "ns8390.h"
-#ifdef	INCLUDE_NS8390
-#include "pci.h"
-#else
 #include "isa.h"
-#endif
 
 static unsigned char	eth_vendor, eth_flags;
-#ifdef	INCLUDE_WD
-static unsigned char	eth_laar;
-#endif
 static unsigned short	eth_nic_base, eth_asic_base;
 static unsigned char	eth_memsize, eth_rx_start, eth_tx_start;
 static Address		eth_bmem, eth_rmem;
 static unsigned char	eth_drain_receiver;
 
-#ifdef	INCLUDE_WD
-static struct wd_board {
-	const char *name;
-	char id;
-	char flags;
-	char memsize;
-} wd_boards[] = {
-	{"WD8003S",	TYPE_WD8003S,	0,			MEM_8192},
-	{"WD8003E",	TYPE_WD8003E,	0,			MEM_8192},
-	{"WD8013EBT",	TYPE_WD8013EBT,	FLAG_16BIT,		MEM_16384},
-	{"WD8003W",	TYPE_WD8003W,	0,			MEM_8192},
-	{"WD8003EB",	TYPE_WD8003EB,	0,			MEM_8192},
-	{"WD8013W",	TYPE_WD8013W,	FLAG_16BIT,		MEM_16384},
-	{"WD8003EP/WD8013EP",
-			TYPE_WD8013EP,	0,			MEM_8192},
-	{"WD8013WC",	TYPE_WD8013WC,	FLAG_16BIT,		MEM_16384},
-	{"WD8013EPC",	TYPE_WD8013EPC,	FLAG_16BIT,		MEM_16384},
-	{"SMC8216T",	TYPE_SMC8216T,	FLAG_16BIT | FLAG_790,	MEM_16384},
-	{"SMC8216C",	TYPE_SMC8216C,	FLAG_16BIT | FLAG_790,	MEM_16384},
-	{"SMC8416T",	TYPE_SMC8416T,	FLAG_16BIT | FLAG_790,	MEM_8192},
-	{"SMC8416C/BT",	TYPE_SMC8416C,	FLAG_16BIT | FLAG_790,	MEM_8192},
-	{"SMC8013EBP",	TYPE_SMC8013EBP,FLAG_16BIT,		MEM_16384},
-	{NULL,		0,		0,			0}
-};
-#endif
-
-#ifdef	INCLUDE_3C503
-static unsigned char	t503_output;	/* AUI or internal xcvr (Thinnet) */
-#endif
-
-#if	defined(INCLUDE_WD)
-#define	ASIC_PIO	WD_IAR
-#define	eth_probe	wd_probe
-#if	defined(INCLUDE_3C503) || defined(INCLUDE_NE) || defined(INCLUDE_NS8390)
-Error you must only define one of INCLUDE_WD, INCLUDE_3C503, INCLUDE_NE, INCLUDE_NS8390
-#endif
-#endif
-
-#if	defined(INCLUDE_3C503)
-#define	eth_probe	t503_probe
-#if	defined(INCLUDE_NE) || defined(INCLUDE_NS8390) || defined(INCLUDE_WD)
-Error you must only define one of INCLUDE_WD, INCLUDE_3C503, INCLUDE_NE, INCLUDE_NS8390
-#endif
-#endif
-
-#if	defined(INCLUDE_NE)
 #define	eth_probe	ne_probe
-#if	defined(INCLUDE_NS8390) || defined(INCLUDE_3C503) || defined(INCLUDE_WD)
-Error you must only define one of INCLUDE_WD, INCLUDE_3C503, INCLUDE_NE, INCLUDE_NS8390
-#endif
-#endif
-
-#if	defined(INCLUDE_NS8390)
-#define	eth_probe	nepci_probe
-#if	defined(INCLUDE_NE) || defined(INCLUDE_3C503) || defined(INCLUDE_WD)
-Error you must only define one of INCLUDE_WD, INCLUDE_3C503, INCLUDE_NE, INCLUDE_NS8390
-#endif
-#endif
-
-#if	defined(INCLUDE_3C503)
-#define	ASIC_PIO	_3COM_RFMSB
-#else
-#if	defined(INCLUDE_NE) || defined(INCLUDE_NS8390)
 #define	ASIC_PIO	NE_DATA
-#endif
-#endif
 
 #if	defined(INCLUDE_NE) || defined(INCLUDE_NS8390) || (defined(INCLUDE_3C503) && !defined(T503_SHMEM)) || (defined(INCLUDE_WD) && defined(WD_790_PIO))
 /**************************************************************************
@@ -235,12 +164,12 @@ static void eth_pio_read(unsigned int src __unused, unsigned char *dst  __unused
 /**************************************************************************
 enable_multycast - Enable Multicast
 **************************************************************************/
-static void enable_multicast(unsigned short eth_nic_base) 
+static void enable_multicast(unsigned short eth_nic_base)
 {
 	unsigned char mcfilter[8];
 	int i;
 	memset(mcfilter, 0xFF, 8);
-	outb(4, eth_nic_base+D8390_P0_RCR);	
+	outb(4, eth_nic_base+D8390_P0_RCR);
 	outb(D8390_COMMAND_RD2 + D8390_COMMAND_PS1, eth_nic_base + D8390_P0_COMMAND);
 	for(i=0;i<8;i++)
 	{
@@ -933,7 +862,7 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 		eth_rmem = eth_bmem;
 	ns8390_reset(nic);
 
-	dev->disable  = ns8390_disable; 
+	dev->disable  = ns8390_disable;
 	nic->poll     = ns8390_poll;
 	nic->transmit = ns8390_transmit;
 	nic->irq      = ns8390_irq;
@@ -959,7 +888,7 @@ static struct isa_driver wd_driver __isa_driver = {
 	.type    = NIC_DRIVER,
 	.name    = "WD",
 	.probe   = wd_probe,
-	.ioaddrs = 0, 
+	.ioaddrs = 0,
 };
 #endif
 
@@ -968,7 +897,7 @@ static struct isa_driver t503_driver __isa_driver = {
 	.type    = NIC_DRIVER,
 	.name    = "3C503",
 	.probe   = t503_probe,
-	.ioaddrs = 0, 
+	.ioaddrs = 0,
 };
 #endif
 
@@ -977,7 +906,7 @@ static struct isa_driver ne_driver __isa_driver = {
 	.type    = NIC_DRIVER,
 	.name    = "NE*000",
 	.probe   = ne_probe,
-	.ioaddrs = 0, 
+	.ioaddrs = 0,
 };
 #endif
 
