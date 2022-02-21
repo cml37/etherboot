@@ -198,8 +198,8 @@ static void eth_rx_overrun(struct nic *nic)
 
 	/* enter loopback mode and restart NIC */
 	outb(2, eth_nic_base+D8390_P0_TCR);
-		outb(D8390_COMMAND_PS0 | D8390_COMMAND_RD2 |
-			D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
+	outb(D8390_COMMAND_PS0 | D8390_COMMAND_RD2 |
+	     D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
 
 	/* clear the RX ring, acknowledge overrun interrupt */
 	eth_drain_receiver = 1;
@@ -234,8 +234,8 @@ static void ns8390_transmit(
 		s += ETH_HLEN;
 		if (s < ETH_ZLEN) s = ETH_ZLEN;
 	}
-		outb(D8390_COMMAND_PS0 |
-			D8390_COMMAND_RD2 | D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
+	outb(D8390_COMMAND_PS0 |
+		D8390_COMMAND_RD2 | D8390_COMMAND_STA, eth_nic_base+D8390_P0_COMMAND);
 	outb(eth_tx_start, eth_nic_base+D8390_P0_TPSR);
 	outb(s, eth_nic_base+D8390_P0_TBCR0);
 	outb(s>>8, eth_nic_base+D8390_P0_TBCR1);
@@ -307,19 +307,6 @@ static int ns8390_poll(struct nic *nic, int retrieve)
 			memcpy(p, bus_to_virt(eth_rmem + pktoff), len);
 		ret = 1;
 	}
-#ifdef	INCLUDE_WD
-#ifndef	WD_790_PIO
-	if (eth_flags & FLAG_790) {
-		outb(0, eth_asic_base + WD_MSR);
-		inb(0x84);
-	}
-#endif
-	if (eth_flags & FLAG_16BIT) {
-		outb(eth_laar & ~WD_LAAR_M16EN, eth_asic_base + WD_LAAR);
-		inb(0x84);
-	}
-	inb(0x84);
-#endif
 	next = pkthdr.next;		/* frame number of next packet */
 	if (next == eth_rx_start)
 		next = eth_memsize;
@@ -364,7 +351,6 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 
 	nic->irqno  = 0;
 
-#if	defined(INCLUDE_NE) || defined(INCLUDE_NS8390)
 {
 	/******************************************************************
 	Search for NE1000/2000 if no WD/SMC or 3com cards
@@ -431,7 +417,6 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 			nic->node_addr);
 	}
 }
-#endif
 	if (eth_vendor == VENDOR_NONE)
 		return(0);
         if (eth_vendor != VENDOR_3COM)
@@ -444,29 +429,17 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 	nic->irq      = ns8390_irq;
 
         /* Based on PnP ISA map */
-#ifdef	INCLUDE_WD
-        dev->devid.vendor_id = htons(GENERIC_ISAPNP_VENDOR);
-        dev->devid.device_id = htons(0x812a);
-#endif
-#ifdef	INCLUDE_3C503
-        dev->devid.vendor_id = htons(GENERIC_ISAPNP_VENDOR);
-        dev->devid.device_id = htons(0x80f3);
-#endif
-#ifdef	INCLUDE_NE
         dev->devid.vendor_id = htons(GENERIC_ISAPNP_VENDOR);
         dev->devid.device_id = htons(0x80d6);
-#endif
 	return 1;
 }
 
-#ifdef	INCLUDE_NE
 static struct isa_driver ne_driver __isa_driver = {
 	.type    = NIC_DRIVER,
 	.name    = "NE*000",
 	.probe   = ne_probe,
 	.ioaddrs = 0,
 };
-#endif
 
 
 /*
