@@ -402,7 +402,7 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 
 			/* TODO Test card address */
 		}
-
+        printf("Hard code card address for now\n");
 		eth_nic_base = 768;
 
 		if (eth_nic_base == 0)
