@@ -44,15 +44,23 @@ ETH_PIO_READ - Read a frame via Programmed I/O
 **************************************************************************/
 static void eth_pio_read(unsigned int src, unsigned char *dst, unsigned int cnt)
 {
+	// Select page 0
 	outb(D8390_COMMAND_RD2 |
 		D8390_COMMAND_STA, eth_nic_base + D8390_P0_COMMAND);
+
+    // Set up DMA Byte Count
 	outb(cnt, eth_nic_base + D8390_P0_RBCR0);
 	outb(cnt>>8, eth_nic_base + D8390_P0_RBCR1);
+
+    // Set up Destination address in memory
 	outb(src, eth_nic_base + D8390_P0_RSAR0);
 	outb(src>>8, eth_nic_base + D8390_P0_RSAR1);
+
+    // Perform Remote DMA Read
 	outb(D8390_COMMAND_RD0 |
 		D8390_COMMAND_STA, eth_nic_base + D8390_P0_COMMAND);
 
+    // Copy Back the Data!
 	if (eth_flags & FLAG_16BIT)
 		cnt = (cnt + 1) >> 1;
 
@@ -373,27 +381,32 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 			eth_memsize = MEM_12288;
 			eth_tx_start = 32;
 			eth_rx_start = 32 + D8390_TXBUF_SIZE;
+
+			/* Reset */
 			c = inb(eth_asic_base + NE_RESET);
 			outb(c, eth_asic_base + NE_RESET);
+
+			/* Sleep to allow the reset to take place */
 			inb(0x84);
+			inb(0x84);
+			inb(0x84);
+			inb(0x84);
+
+			/* Stop the card */
 			outb(D8390_COMMAND_STP |
 				D8390_COMMAND_RD2, eth_nic_base + D8390_P0_COMMAND);
-			outb(D8390_RCR_MON, eth_nic_base + D8390_P0_RCR);
-			outb(D8390_DCR_FT1 | D8390_DCR_LS, eth_nic_base + D8390_P0_DCR);
-			outb(MEM_8192, eth_nic_base + D8390_P0_PSTART);
-			outb(MEM_12288, eth_nic_base + D8390_P0_PSTOP);
 
-			eth_pio_write(test, 8192, sizeof(test));
-			eth_pio_read(8192, testbuf, sizeof(test));
-			if (!memcmp(test, testbuf, sizeof(test)))
-				break;
+			/* Set FIFO threshold to 8, no auto-init remote DNA, byte order=80x86, word-wide DMA transfers */
+			outb(D8390_DCR_FT1 | D8390_DCR_LS | D8390_DCR_WTS, eth_nic_base + D8390_P0_DCR);
+            eth_flags |= FLAG_16BIT;
+
+			/* TODO Test card address */
 		}
-		eth_flags |= FLAG_16BIT;
+
 		eth_nic_base = 768;
+
 		if (eth_nic_base == 0)
 			return (0);
-		if (eth_nic_base > ISA_MAX_ADDR)	/* PCI probably */
-			eth_flags |= FLAG_16BIT;
 		eth_vendor = VENDOR_NOVELL;
 		eth_pio_read(0, romdata, sizeof(romdata));
 		for (i=0; i<ETH_ALEN; i++) {
