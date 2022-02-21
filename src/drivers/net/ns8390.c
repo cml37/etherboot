@@ -41,7 +41,7 @@ static unsigned char	eth_drain_receiver;
 #define	eth_probe	ne_probe
 #define	ASIC_PIO	NE_DATA
 
-#define u08 byte
+#define u08 char
 
 /**************************************************************************
 ETH_PIO_READ - Read a frame via Programmed I/O
