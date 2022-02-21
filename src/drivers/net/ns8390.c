@@ -361,9 +361,7 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 		int idx;
 		static char test[] = "NE*000 memory";
 		static unsigned short base[] = {
-#ifdef	NE_SCAN
 			NE_SCAN,
-#endif
 			0 };
 		/* if no addresses supplied, fall back on defaults */
 		if (probe_addrs == 0 || probe_addrs[0] == 0)
@@ -372,7 +370,7 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 		for (idx = 0; (eth_nic_base = probe_addrs[idx]) != 0; ++idx) {
 			eth_flags = FLAG_PIO;
 			eth_asic_base = eth_nic_base + NE_ASIC_OFFSET;
-			eth_memsize = MEM_16384;
+			eth_memsize = MEM_12288;
 			eth_tx_start = 32;
 			eth_rx_start = 32 + D8390_TXBUF_SIZE;
 			c = inb(eth_asic_base + NE_RESET);
@@ -383,25 +381,14 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 			outb(D8390_RCR_MON, eth_nic_base + D8390_P0_RCR);
 			outb(D8390_DCR_FT1 | D8390_DCR_LS, eth_nic_base + D8390_P0_DCR);
 			outb(MEM_8192, eth_nic_base + D8390_P0_PSTART);
-			outb(MEM_16384, eth_nic_base + D8390_P0_PSTOP);
+			outb(MEM_12288, eth_nic_base + D8390_P0_PSTOP);
 
 			eth_pio_write(test, 8192, sizeof(test));
 			eth_pio_read(8192, testbuf, sizeof(test));
 			if (!memcmp(test, testbuf, sizeof(test)))
 				break;
-			eth_flags |= FLAG_16BIT;
-			eth_memsize = MEM_32768;
-			eth_tx_start = 64;
-			eth_rx_start = 64 + D8390_TXBUF_SIZE;
-			outb(D8390_DCR_WTS |
-				D8390_DCR_FT1 | D8390_DCR_LS, eth_nic_base + D8390_P0_DCR);
-			outb(MEM_16384, eth_nic_base + D8390_P0_PSTART);
-			outb(MEM_32768, eth_nic_base + D8390_P0_PSTOP);
-			eth_pio_write(test, 16384, sizeof(test));
-			eth_pio_read(16384, testbuf, sizeof(test));
-			if (!memcmp(testbuf, test, sizeof(test)))
-				break;
 		}
+		eth_nic_base = 768;
 		if (eth_nic_base == 0)
 			return (0);
 		if (eth_nic_base > ISA_MAX_ADDR)	/* PCI probably */
@@ -428,9 +415,9 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 	nic->transmit = ns8390_transmit;
 	nic->irq      = ns8390_irq;
 
-        /* Based on PnP ISA map */
-        dev->devid.vendor_id = htons(GENERIC_ISAPNP_VENDOR);
-        dev->devid.device_id = htons(0x80d6);
+    /* Based on PnP ISA map */
+    dev->devid.vendor_id = htons(GENERIC_ISAPNP_VENDOR);
+    dev->devid.device_id = htons(0x80d6);
 	return 1;
 }
 
