@@ -388,6 +388,7 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 			if (!memcmp(test, testbuf, sizeof(test)))
 				break;
 		}
+		eth_flags |= FLAG_16BIT;
 		eth_nic_base = 768;
 		if (eth_nic_base == 0)
 			return (0);
