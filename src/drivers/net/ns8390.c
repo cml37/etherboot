@@ -420,8 +420,7 @@ static int eth_probe (struct dev *dev, unsigned short *probe_addrs __unused)
 }
 	if (eth_vendor == VENDOR_NONE)
 		return(0);
-        if (eth_vendor != VENDOR_3COM)
-		eth_rmem = eth_bmem;
+	eth_rmem = eth_bmem;
 	ns8390_reset(nic);
 
 	dev->disable  = ns8390_disable;
