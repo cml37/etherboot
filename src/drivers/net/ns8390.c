@@ -29,6 +29,8 @@ SMC8416 PIO support added by Andrew Bettison (andrewb@zip.com.au) on 4/3/02
 #include "nic.h"
 #include "ns8390.h"
 #include "isa.h"
+#include "rtl8019conf.h"
+#include "rtl8019.h"
 
 static unsigned char	eth_vendor, eth_flags;
 static unsigned short	eth_nic_base, eth_asic_base;
