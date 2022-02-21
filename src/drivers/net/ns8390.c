@@ -44,7 +44,7 @@ ETH_PIO_READ - Read a frame via Programmed I/O
 **************************************************************************/
 static void eth_pio_read(unsigned int src, unsigned char *dst, unsigned int cnt)
 {
-	// Select page 0
+	// Abort any reads in process
 	outb(D8390_COMMAND_RD2 |
 		D8390_COMMAND_STA, eth_nic_base + D8390_P0_COMMAND);
 
